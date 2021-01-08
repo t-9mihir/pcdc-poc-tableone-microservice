@@ -1,18 +1,22 @@
 from json import dumps
 from faker import Faker
 import collections
+import random
+
+
+a = ["male", "female"]
 
 database = []
-filename = '1h'
-length   = 100
+filename = 'data'
+length   = 7000
 fake     = Faker() # <--- Forgot this
 
 for x in range(length):
     database.append(collections.OrderedDict([
-        ('last_name', fake.last_name()),
-        ('first_name', fake.first_name()),
-        ('street_address', fake.street_address()),
-        ('email', fake.email())
+        ('age', fake.random_int(2, 19)),
+        ('sex', random.choice(a)),
+        ('weight', fake.random_int(60, 200)),
+        ('SMN', fake.random_int(0,1))
     ]))
 
 with open('%s.json' % filename, 'w') as output:
