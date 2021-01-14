@@ -8,12 +8,12 @@ a = ["male", "female"]
 
 database = []
 filename = 'data'
-length   = 7000
-fake     = Faker() # <--- Forgot this
+length   = 3000
+fake     = Faker() 
 
 for x in range(length):
     database.append(collections.OrderedDict([
-        ('age', fake.random_int(2, 19)),
+        ('age', fake.random_int(0, 7200)),
         ('sex', random.choice(a)),
         ('weight', fake.random_int(60, 200)),
         ('SMN', fake.random_int(0,1))
