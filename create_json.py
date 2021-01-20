@@ -13,9 +13,9 @@ fake     = Faker()
 
 for x in range(length):
     database.append(collections.OrderedDict([
-        ('age', fake.random_int(0, 7200)),
-        ('sex', random.choice(a)),
-        ('weight', fake.random_int(60, 200)),
+        ('AGE', fake.random_int(0, 600)),
+        ('SEX', random.choice(a)),
+        ('WEIGHT', fake.random_int(60, 200)),
         ('SMN', fake.random_int(0,1))
     ]))
 

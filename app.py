@@ -24,34 +24,13 @@ def fetch_fake_data(args):
     Args:
         args(dict): Request body parameters and values
     """
-    efs_flag = args.get("efsFlag", False)
-    factor_var = args.get("factorVariable", "")
-    stratification_var = args.get("stratificationVariable", "")
-    start_time = args.get("startTime", 0)
-    end_time = args.get("endTime", 0)
-
-    status_col, time_col = (
-        ("EFSCENS", "EFSTIME")
-        if efs_flag
-        else ("SCENS", "STIME")
-    )
-    time_range_query = (
-        f"time >= {start_time} and time <= {end_time}"
-        if end_time > 0
-        else f"time >= {start_time}"
-    )
 
     return (
         pd.read_json("./data.json", orient="records")
-        .query(f"{time_col} >= 0")
-        .assign(status=lambda x: x[status_col] == 1,
-                time=lambda x: x[time_col] / 365.25)
-        .filter(items=[factor_var, stratification_var, "status", "time"])
-        .query(time_range_query)
     )
 
 
-def get_onetable_result(data, args):
+def get_tableone_result(data, args):
     """Returns the onetable results (dict) based on data and request body
 
     Args:
@@ -62,15 +41,57 @@ def get_onetable_result(data, args):
         A dict of survival result consisting of "pval", "risktable", and "survival" data
         example:
 
-        {"pval": 0.1,
-         "risktable": [{ "nrisk": 30, "time": 0}],
-         "survival": [{"prob": 1.0, "time": 0.0}]}
     """
+    groupingVariable = args["values"]["groupingVariable"]
+    covariates = args["values"]["covariates"]
+    grouping_operator = groupingVariable["trueIf"]["operator"]     # groupingVariable operator
+    grouping_query_operator = { "eq" :"==" , "gt" : ">" , "gte" : ">=", "lt" : "<" , "lte" : "<=",}
+    grouping_value = groupingVariable["trueIf"]["value"]
+    query_data_true = data.query(f" {groupingVariable['name']} {grouping_query_operator[grouping_operator]} {grouping_value} ")
+    query_data_false = data[~data.index.isin(query_data_true.index)]
+    total = len(data)                                              # total patients number
+    true_number = len(query_data_true)                             
+    
+    response_headers={"size": 'Sample size (' + groupingVariable['name'] + ')',"true": groupingVariable['label']['true'],"false": groupingVariable['label']['false']}
 
+    response_variables=[]
+    for covariate in covariates: 
+        keys=[]
+        if covariate["type"] == "continuous":
+            true_mean = format((query_data_true[covariate['name']].mean())/int(covariate['unit']), '0.0f' )
+            false_mean = format((query_data_false[covariate['name']].mean())/int(covariate['unit']), '0.0f' )
+            keys = [{"name" : "" , "data" : {"true" : true_mean, "false" : false_mean } }]
+            
+        if covariate["type"] == "categorical":
+            cats = dict(zip(covariate["keys"],covariate["values"]))
+            
+            for k,v in cats.items():
+                cat_true = '{:.1%}'.format( len(query_data_true.query(f"{covariate['name']} == '{v}' ")) / len(query_data_true) )
+                cat_false = '{:.1%}'.format( len(query_data_false.query(f"{covariate['name']} == '{v}' ")) / len(query_data_false) )
+                key={"name" : k , "data" : {"true" : cat_true, "false" : cat_false} }
+                keys.append(key)
 
-    return [
-{"name":"Clinical Characteristic", "sampleSize":null, "SMN":null, "category":[]},
-]
+        if covariate["type"] == "bucketized":
+            covariate["cutoffs"] = [int(i) for i in covariate["cutoffs"]] 
+            buck_value = [ covariate["range"][0] ] + list( covariate["cutoffs"] ) + [ covariate["range"][1] ]             
+            for i in range(len(buck_value)-1):
+                buck_true = '{:.1%}'.format( len(query_data_true.query(f"{covariate['name']} >= {buck_value[i]*int(covariate['unit'])} & {covariate['name']} < {buck_value[i+1] * int(covariate['unit'])}  ")) / len(query_data_true) )                
+                buck_false = '{:.1%}'.format( len(query_data_false.query(f"{covariate['name']} >= {buck_value[i]*int(covariate['unit'])} & {covariate['name']} < {buck_value[i+1] * int(covariate['unit'])}  ")) / len(query_data_false) )
+                key={"name" : covariate["keys"][i] , "data" : {"true" : buck_true, "false" : buck_false} }                
+                keys.append(key)
+
+        varible={
+        "name" : covariate["label"],
+        "size" : { "total" : total ,"true" : true_number  },
+        "pval" : None,
+        "keys"  : keys
+        }
+        response_variables.append(varible)    
+
+    return    {
+        "headers": response_headers,
+        "variables": response_variables,
+    }
 
 
 @app.route("/", methods=["OPTIONS", "POST"])
@@ -82,82 +103,12 @@ def root():
         response.headers.add("Access-Control-Allow-Methods", "*")
         return response
 
+
     elif request.method == "POST":
-        response = jsonify({
-    "headers": {
-        "size": "Sample size (SMN)",
-        "true": "SMN Formed",
-        "false": "No SMN Formed"
-    },
-    "variables": [
-        {
-            "name": "Mean age at diagnosis (mo)",
-            "size": {
-                "total": 5327,
-                "true": 47
-            },
-            "pval": 0.23,
-            "keys": [
-                {
-                    "name": "",
-                    "data": {
-                        "true": 27.5,
-                        "false": 18.0
-                    }
-                }
-            ]
-        },
-        {
-            "name": "Age at diagnosis",
-            "size": {
-                "total": 5787,
-                "true": 42
-            },
-            "pval": 0.27,
-            "keys": [
-                {
-                    "name": "< 18 mo",
-                    "data": {
-                        "true": 41.9,
-                        "false": 51.3
-                    }
-                },
-                {
-                    "name": ">= 18 mo",
-                    "data": {
-                        "true": 58.1,
-                        "false": 50.0
-                    }
-                }
-            ]
-        },
-        {
-            "name": "Sex",
-            "size": {
-                "total": 2001,
-                "true": 51
-            },
-            "pval": 0.07,
-            "keys": [
-                {
-                    "name": "Female",
-                    "data": {
-                        "true": 62.8,
-                        "false": 46.6
-                    }
-                },
-                {
-                    "name": "Male",
-                    "data": {
-                        "true": 37.2,
-                        "false": 53.4
-                    }
-                }
-            ]
-        }
-    ]
-})
+        args = request.get_json()
+        data = (
+            fetch_fake_data(args)
+        )
+        response = jsonify(get_tableone_result(data, args))
         response.headers.add("Access-Control-Allow-Origin", "*")
         return response
-
- 
