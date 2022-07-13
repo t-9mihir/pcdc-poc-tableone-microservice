@@ -42,20 +42,20 @@ def get_tableone_result(data, args):
         example:
 
     """
-    groupingVariable = args["values"]["groupingVariable"]
-    covariates = args["values"]["covariates"]
+    groupingVariable = args["groupingVariable"] #groupingVariable now set to groupingVariable object from JSON
+    covariates = args["covariates"] 
     grouping_operator = groupingVariable["trueIf"]["operator"]     # groupingVariable operator
     grouping_query_operator = { "eq" :"==" , "gt" : ">" , "gte" : ">=", "lt" : "<" , "lte" : "<=",}
     grouping_value = groupingVariable["trueIf"]["value"]
-    query_data_true = data.query(f" {groupingVariable['name']} {grouping_query_operator[grouping_operator]} {grouping_value} ")
-    query_data_false = data[~data.index.isin(query_data_true.index)]
+    query_data_true = data.query(f" {groupingVariable['name']} {grouping_query_operator[grouping_operator]} {grouping_value} ") #only 'true (+)' objects/patients
+    query_data_false = data[~data.index.isin(query_data_true.index)] #false (-) patients
     total = len(data)                                              # total patients number
-    true_number = len(query_data_true)                             
+    true_number = len(query_data_true)                             #total true patients number
     
     response_headers={"size": 'Sample size (' + groupingVariable['name'] + ')',"true": groupingVariable['label']['true'],"false": groupingVariable['label']['false']}
 
     response_variables=[]
-    for covariate in covariates: 
+    for covariate in covariates: #traverses through each element of covariates array 
         keys=[]
         if covariate["type"] == "continuous":
             true_mean = format((query_data_true[covariate['name']].mean())/int(covariate['unit']), '0.0f' )
@@ -72,10 +72,12 @@ def get_tableone_result(data, args):
                 keys.append(key)
 
         if covariate["type"] == "bucketized":
-            covariate["cutoffs"] = [int(i) for i in covariate["cutoffs"]] 
-            buck_value = [ covariate["range"][0] ] + list( covariate["cutoffs"] ) + [ covariate["range"][1] ]             
-            for i in range(len(buck_value)-1):
+            covariate["cutoffs"] = [int(i) for i in covariate["cutoffs"]] #traverses cutoffs array
+            buck_value = [ covariate["range"][0] ] + list( covariate["cutoffs"] ) + [ covariate["range"][1] ]  #buck_value is a list, #buck stands for bucketized           
+            for i in range(len(buck_value)-1): 
                 buck_true = '{:.1%}'.format( len(query_data_true.query(f"{covariate['name']} >= {buck_value[i]*int(covariate['unit'])} & {covariate['name']} < {buck_value[i+1] * int(covariate['unit'])}  ")) / len(query_data_true) )                
+                #format percentage with 1 decimal point 
+                #buck_true is % of patients with SMN that are < 18 mo
                 buck_false = '{:.1%}'.format( len(query_data_false.query(f"{covariate['name']} >= {buck_value[i]*int(covariate['unit'])} & {covariate['name']} < {buck_value[i+1] * int(covariate['unit'])}  ")) / len(query_data_false) )
                 key={"name" : covariate["keys"][i] , "data" : {"true" : buck_true, "false" : buck_false} }                
                 keys.append(key)
@@ -112,3 +114,11 @@ def root():
         response = jsonify(get_tableone_result(data, args))
         response.headers.add("Access-Control-Allow-Origin", "*")
         return response
+
+'''
+July 8th, 2022
+added auto-run lines below with debug and auto reloader
+'''
+
+if __name__ == '__main__':
+    app.run(debug=True, use_reloader=True)
