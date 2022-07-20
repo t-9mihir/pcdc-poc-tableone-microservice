@@ -88,6 +88,7 @@ def get_tableone_result(data, args):
                 buck_false = '{:.1%}'.format( len(query_data_false.query(f"{covariate['name']} >= {buck_value[i]*int(covariate['unit'])} & {covariate['name']} < {buck_value[i+1] * int(covariate['unit'])}  ")) / len(query_data_false) )
                 key={"name" : covariate["keys"][i] , "data" : {"true" : buck_true, "false" : buck_false} }                
                 keys.append(key)
+                
         
 
         covariate_summary_variable={
@@ -126,7 +127,6 @@ def root():
         return response 
 
 '''
-July 8th, 2022
 added auto-run lines below with debug and auto reloader
 '''
 
